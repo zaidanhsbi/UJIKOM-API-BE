@@ -1,14 +1,14 @@
 # BinoExam Backend API (Laravel)
 
-Backend REST API untuk sistem ujian **BinoExam** (autentikasi multi-sekolah, manajemen akademik Admin, bank soal & ujian Guru, serta pengerjaan & sinkronisasi semi-offline Siswa).
+Backend REST API untuk sistem ujian **BinoExam** (autentikasi multi-sekolah, manajemen akademik Admin, bank soal & ujian Guru, serta pengerjaan & sinkronisasi *Offline-First* Siswa) yang dibangun menggunakan **Laravel 13** dan **Laravel Sanctum**.
 
 ---
 
-## 1. Prerequisites (Yang Harus Di-download)
+## 1. Prerequisites
 
-- **PHP >= 8.2** (ekstensi wajib: `mbstring`, `openssl`, `pdo_mysql`, `tokenizer`, `xml`, `ctype`, `json`, `bcmath`, `fileinfo`, `gd`/`zip`)
+- **PHP >= 8.3** (ekstensi wajib: `mbstring`, `openssl`, `pdo_mysql`, `tokenizer`, `xml`, `ctype`, `json`, `bcmath`, `fileinfo`, `zip`, serta disarankan mengaktifkan `opcache`)
 - **Composer**: https://getcomposer.org/download/
-- **MySQL / MariaDB** (bisa lewat Laragon, XAMPP, atau MySQL Server mandiri)
+- **MySQL / MariaDB** (bisa lewat Laragon, XAMPP, atau MySQL Server mandiri pada port `3306`)
 - **Git**: https://git-scm.com/downloads
 
 Cek instalasi:
@@ -33,9 +33,10 @@ composer -V
    ```powershell
    copy .env.example .env
    ```
-4. Generate application key:
+4. Generate application key dan buat symbolic link storage (untuk gambar/media soal):
    ```powershell
    php artisan key:generate
+   php artisan storage:link
    ```
 5. Buat database kosong di MySQL (misal bernama `binoexam`), lalu jalankan migrasi & seeder demo SMK:
    ```powershell
@@ -65,44 +66,62 @@ DB_USERNAME=root
 DB_PASSWORD=
 ```
 
+- Gunakan `DB_HOST=127.0.0.1` (bukan `localhost`) di Windows agar tidak terjadi jeda resolusi IPv6.
 - Sesuaikan `APP_TIMEZONE` dengan zona waktu sekolah agar seluruh jadwal ujian (`starts_at`, `ends_at`) akurat:
   - **WIB (UTC+7):** `APP_TIMEZONE=Asia/Jakarta`
   - **WITA (UTC+8):** `APP_TIMEZONE=Asia/Makassar`
   - **WIT (UTC+9):** `APP_TIMEZONE=Asia/Jayapura`
-  *(Setelah mengubah `.env` di mode produksi, jalankan `php artisan config:clear` atau `php artisan config:cache`.)*
+  *(Setelah mengubah `.env`, jalankan `php artisan optimize:clear` atau `php artisan optimize`.)*
 
 ---
 
-## 4. Mode Offline (Lokal) vs Online (Produksi)
+## 4. Mode Lokal vs Produksi
 
-### A. Mode Offline / Server Lokal Sekolah
-- Jalankan server agar bisa diakses dari HP/laptop lain dalam satu jaringan Wi-Fi/LAN:
+### A. Mode Lokal / Server LAN Sekolah
+- Agar bisa diakses dari HP/laptop lain dalam satu jaringan Wi-Fi/LAN:
   ```powershell
   php artisan serve --host=0.0.0.0 --port=8000
   ```
-- Jika hanya diakses dari laptop yang sama:
+- Jika hanya diakses dari komputer yang sama:
   ```powershell
   php artisan serve
   ```
 
-### B. Mode Online / Produksi
-1. Ubah `.env` menjadi mode produksi:
+### B. Mode Online / Produksi (VPS)
+1. Pastikan versi PHP di server sesuai dengan `composer.json` (**PHP 8.3+**).
+2. Ubah `.env` menjadi mode produksi (isi `APP_URL` dengan domain root backend, **tanpa** akhiran `/api`):
    ```env
    APP_ENV=production
    APP_DEBUG=false
-   APP_URL=https://api.domainanda.com/api
+   APP_URL=https://api.domainanda.com
    ```
-2. Optimalkan cache konfigurasi & route:
-   ```powershell
-   php artisan config:cache
-   php artisan route:cache
-   php artisan view:cache
+3. Jalankan symbolic link storage dan optimasi cache Laravel:
+   ```bash
+   php artisan storage:link
+   php artisan optimize
    ```
-3. Jalankan di web server produksi (**Nginx / Apache + PHP-FPM**) yang mengarah ke folder `dashboard/be/public`.
+4. Arahkan document root web server produksi (**Nginx / Apache + PHP-FPM**) ke folder `dashboard/be/public`.
 
 ---
 
-## 5. Menjalankan Pengujian
+## 5. Optimasi Performa & Troubleshooting
+
+- **API terasa lambat (~500 ms per request) di Windows (`php artisan serve`)**:
+  1. Aktifkan **OPcache** untuk CLI pada `php.ini` yang sedang dipakai (cek lokasinya dengan `php --ini`), lalu hilangkan tanda `;` dan atur nilainya menjadi:
+     ```ini
+     zend_extension=opcache
+     opcache.enable=1
+     opcache.enable_cli=1
+     ```
+  2. Jalankan `php artisan optimize` di folder `dashboard/be`.
+  3. Tambahkan folder proyek ke *Exclusion* Windows Defender agar folder `vendor/` tidak dipindai berulang kali setiap request.
+  4. Untuk beban paralel yang lebih tinggi di lokal Windows, gunakan **Nginx/Apache bawaan Laragon** dibandingkan `php artisan serve` (yang bersifat *single-threaded*).
+- **Error `SQLSTATE[HY000] [2002] No connection could be made... port 3306`**:
+  Pastikan layanan **MySQL** di Laragon/XAMPP sudah dijalankan terlebih dahulu.
+
+---
+
+## 6. Menjalankan Pengujian
 
 ```powershell
 php artisan test
