@@ -45,6 +45,18 @@ composer -V
    ```
    *(Jika ingin reset database dari awal: `php artisan migrate:fresh; php artisan db:seed --class=SmkDemoSeeder`.)*
 
+   **Kredensial Default Hasil Seeder:**
+   - **NPSN Sekolah**: `20201234`
+   - **Role Admin**:
+     - Username: `admin`
+     - Password: `password`
+   - **Role Guru** (Contoh: `GR-001` s/d `GR-005`):
+     - Username: `GR-001`
+     - Password: `password`
+   - **Role Siswa** (Contoh: `SW-0001` s/d `SW-0020`):
+     - Username: `0082000001` 
+     - Password: `password`
+
 ---
 
 ## 3. Konfigurasi (`.env`)
