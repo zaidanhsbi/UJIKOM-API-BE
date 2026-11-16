@@ -263,6 +263,12 @@ class StudentExamService
             unset($content['pairs']);
         }
 
+        if ($question->type === 'ur' && isset($content['items']) && is_array($content['items']) && count($content['items']) > 1) {
+            $items = array_values($content['items']);
+            shuffle($items);
+            $content['items'] = $items;
+        }
+
         return [
             'id' => $question->id,
             'type' => $question->type,
@@ -292,7 +298,8 @@ class StudentExamService
             'pg', 'bs' => $this->gradeSingleChoice($content, $rawAnswer),
             'pgk' => $this->gradeMultipleChoice($content, $rawAnswer),
             'jd' => $this->gradeMatchingPairs($content, $rawAnswer),
-            default => $this->gradeEssayAnswer($content, $rawAnswer),
+            'ur' => $this->gradeOrdering($content, $rawAnswer),
+            default => false,
         };
     }
 
@@ -359,15 +366,28 @@ class StudentExamService
     }
 
     /**
-     * Menilai soal isian/uraian singkat (UR).
+     * Menilai soal mengurutkan (UR) berdasarkan kecocokan urutan array item.
      *
      * @param  array<string, mixed>  $content
      */
-    private function gradeEssayAnswer(array $content, mixed $rawAnswer): bool
+    private function gradeOrdering(array $content, mixed $rawAnswer): bool
     {
-        $expected = mb_strtolower(trim((string) ($content['answer'] ?? '')));
-        $actual = mb_strtolower(trim((string) $rawAnswer));
+        $expected = array_values(array_map(
+            fn ($item) => trim((string) $item),
+            is_array($content['items'] ?? null) ? $content['items'] : []
+        ));
 
-        return $expected !== '' && $expected === $actual;
+        if (is_string($rawAnswer)) {
+            $decoded = json_decode($rawAnswer, true);
+            $rawAnswer = is_array($decoded) ? $decoded : [];
+        }
+
+        if (! is_array($rawAnswer) || count($expected) === 0 || count($rawAnswer) !== count($expected)) {
+            return false;
+        }
+
+        $actual = array_values(array_map(fn ($item) => trim((string) $item), $rawAnswer));
+
+        return $actual === $expected;
     }
 }

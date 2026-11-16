@@ -143,39 +143,10 @@ class QuestionService
      */
     public function uploadMedia(UploadedFile $file, int $schoolId, ?string $altText): QuestionMedia
     {
-        $path = null;
-
-        if (function_exists('imagecreatefromstring') && function_exists('imagewebp')) {
-            $raw = file_get_contents($file->getRealPath());
-            $src = @imagecreatefromstring($raw);
-            if ($src !== false) {
-                $origW = imagesx($src);
-                $origH = imagesy($src);
-                $maxDim = 800;
-
-                if ($origW > $maxDim || $origH > $maxDim) {
-                    $ratio = min($maxDim / $origW, $maxDim / $origH);
-                    $newW = (int) round($origW * $ratio);
-                    $newH = (int) round($origH * $ratio);
-                    $dst = imagecreatetruecolor($newW, $newH);
-                    imagealphablending($dst, false);
-                    imagesavealpha($dst, true);
-                    imagecopyresampled($dst, $src, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
-                    imagedestroy($src);
-                    $src = $dst;
-                }
-
-                ob_start();
-                imagewebp($src, null, 72);
-                $webpData = ob_get_clean();
-                imagedestroy($src);
-
-                if ($webpData !== false) {
-                    $path = "question-media/{$schoolId}/" . uniqid('img_', true) . '.webp';
-                    Storage::disk('public')->put($path, $webpData);
-                }
-            }
-        }
+        $raw = file_get_contents($file->getRealPath());
+        $path = $raw !== false
+            ? $this->compressAndStoreImage($raw, $schoolId, 'img_')
+            : null;
 
         if ($path === null) {
             $path = $file->store("question-media/{$schoolId}", 'public');
@@ -187,6 +158,58 @@ class QuestionService
             'file' => $path,
             'alt_text' => $altText !== null && $altText !== '' ? $this->sanitizeText($altText) : null,
         ]);
+    }
+
+    /**
+     * Mengubah gambar mentah menjadi WebP terkompresi (maks 800px) di disk public.
+     */
+    private function compressAndStoreImage(string $rawBinary, int $schoolId, string $prefix = 'img_'): ?string
+    {
+        if (! function_exists('imagecreatefromstring') || ! function_exists('imagewebp')) {
+            return null;
+        }
+
+        // Cek dimensi dari header dulu agar gambar beresolusi raksasa tidak menghabiskan RAM GD
+        $info = @getimagesizefromstring($rawBinary);
+        if (is_array($info) && ($info[0] * $info[1]) > 16000000) {
+            return null;
+        }
+
+        $src = @imagecreatefromstring($rawBinary);
+        unset($rawBinary);
+        if ($src === false) {
+            return null;
+        }
+
+        $origW = imagesx($src);
+        $origH = imagesy($src);
+        $maxDim = 800;
+
+        if ($origW > $maxDim || $origH > $maxDim) {
+            $ratio = min($maxDim / $origW, $maxDim / $origH);
+            $newW = (int) round($origW * $ratio);
+            $newH = (int) round($origH * $ratio);
+            $dst = imagecreatetruecolor($newW, $newH);
+            imagealphablending($dst, false);
+            imagesavealpha($dst, true);
+            imagecopyresampled($dst, $src, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
+            imagedestroy($src);
+            $src = $dst;
+        }
+
+        ob_start();
+        imagewebp($src, null, 72);
+        $webpData = ob_get_clean();
+        imagedestroy($src);
+
+        if ($webpData === false) {
+            return null;
+        }
+
+        $path = "question-media/{$schoolId}/" . uniqid($prefix, true) . '.webp';
+        Storage::disk('public')->put($path, $webpData);
+
+        return $path;
     }
 
     /**
@@ -601,9 +624,12 @@ class QuestionService
             $mediaEntry = $relMap[$blip->nodeValue];
             $binary = $zip->getFromName($mediaEntry);
             if ($binary !== false) {
-                $ext = pathinfo($mediaEntry, PATHINFO_EXTENSION) ?: 'png';
-                $filename = 'question-media/' . $schoolId . '/' . uniqid('docx_', true) . '.' . $ext;
-                Storage::disk('public')->put($filename, $binary);
+                $filename = $this->compressAndStoreImage($binary, $schoolId, 'docx_');
+                if ($filename === null) {
+                    $ext = pathinfo($mediaEntry, PATHINFO_EXTENSION) ?: 'png';
+                    $filename = 'question-media/' . $schoolId . '/' . uniqid('docx_', true) . '.' . $ext;
+                    Storage::disk('public')->put($filename, $binary);
+                }
                 QuestionMedia::create([
                     'school_id' => $schoolId,
                     'question_id' => null,
