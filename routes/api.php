@@ -75,7 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Rute Khusus Guru
     Route::prefix('guru')
-        ->middleware(['role.guru'])
+        ->middleware(['role.guru', 'license.active'])
         ->group(function () {
             Route::get('/dashboard-stats', [GuruDashboardController::class, 'stats']);
             Route::get('/question-banks/template-docx', [QuestionController::class, 'downloadDocxTemplate']);
