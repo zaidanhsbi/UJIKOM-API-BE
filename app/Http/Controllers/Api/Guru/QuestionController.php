@@ -221,6 +221,13 @@ class QuestionController extends Controller
      */
     public function downloadDocxTemplate()
     {
+        $staticTemplate = storage_path('app/templates/Template_Import_Soal_BinoExam.docx');
+        if (file_exists($staticTemplate)) {
+            return response()->download($staticTemplate, 'Template_Import_Soal_BinoExam.docx', [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ]);
+        }
+
         $tmpPath = $this->questionService->buildDocxTemplatePath();
 
         return response()->download($tmpPath, 'Template_Import_Soal_BinoExam.docx', [
