@@ -178,4 +178,19 @@ class QuestionApiTest extends TestCase
         $res->assertJsonPath('imported_count', 2)
             ->assertJsonCount(1, 'errors');
     }
+
+    public function test_guru_docx_import_template_exists_and_can_be_downloaded(): void
+    {
+        $templatePath = storage_path('app/templates/Template_Import_Soal_BinoExam.docx');
+        $this->assertFileExists($templatePath);
+
+        $school = School::where('npsn', '20201234')->first();
+        $guru = User::where('school_id', $school->id)->where('role', 'guru')->first();
+
+        Sanctum::actingAs($guru);
+
+        $res = $this->get('/api/guru/question-banks/template-docx');
+        $res->assertStatus(200)
+            ->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    }
 }
